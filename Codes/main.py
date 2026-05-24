@@ -72,6 +72,8 @@ PIPELINE_STEPS = [
      "03_compute_variables.py"),
     ("Step 4 -- Validate P8 reconstruction, export model-ready panels",
      "04_merge_validate.py"),
+    ("Step 5 -- Build stitched merged panel (FY2015-FY2025, excl. restructured firms)",
+     "05_build_merged_panel.py"),
 ]
 
 
@@ -137,6 +139,8 @@ def main():
         "06_model_ready_fy25.csv",
         "07_p8_reconstruction_check.csv",
         "08_overlap_discrepancy.csv",
+        "excluded_firms.csv",
+        "09_merged_panel.csv",
     ]:
         full = os.path.join(ext_dir, fname)
         status = "OK     " if os.path.isfile(full) else "MISSING"
