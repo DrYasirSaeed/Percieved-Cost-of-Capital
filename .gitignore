@@ -1,0 +1,22 @@
+# Source data (large Excel files — share separately, not committed)
+Source Data/
+
+# Extracted output CSVs — regenerate by running main.py
+Extracted Data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS artefacts
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
