@@ -64,13 +64,13 @@ CODES_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Pipeline scripts, in execution order
 PIPELINE_STEPS = [
-    ("Step 1 — Extract old panel (2014-23 sheet)",
-     "01_extract_sector_panel_old.py"),
-    ("Step 2 — Extract FY25 panel",
-     "02_extract_sector_panel_fy25.py"),
-    ("Step 3 — Compute research variables",
+    ("Step 1 -- Extract firm panel from FSA 2005-23 (2014-23 sheet)",
+     "01_extract_firm_panel_old.py"),
+    ("Step 2 -- Extract firm panel from FSA NFC FY25",
+     "02_extract_firm_panel_fy25.py"),
+    ("Step 3 -- Compute research variables (reconstruct P8/S1 for old file)",
      "03_compute_variables.py"),
-    ("Step 4 — Validate overlap, export model-ready panels",
+    ("Step 4 -- Validate P8 reconstruction, export model-ready panels",
      "04_merge_validate.py"),
 ]
 
@@ -86,9 +86,9 @@ def run_step(label: str, script_filename: str) -> bool:
     Returns:
         True if the script exited with code 0, False otherwise.
     """
-    print(f"\n{'─' * 65}")
+    print(f"\n{'-' * 65}")
     print(f"  {label}")
-    print(f"{'─' * 65}")
+    print(f"{'-' * 65}")
 
     script_path = os.path.join(CODES_DIR, script_filename)
     result = subprocess.run(
@@ -129,12 +129,14 @@ def main():
     ext_dir = os.path.join(project_dir, "Extracted Data")
     print("\nKey output files:")
     for fname in [
-        "01_raw_sector_panel_old.csv",
-        "02_raw_sector_panel_fy25.csv",
+        "01_raw_firm_panel_old.csv",
+        "02_raw_firm_panel_fy25.csv",
+        "03_firm_panel_old_computed.csv",
+        "04_firm_panel_fy25_computed.csv",
         "05_model_ready_old.csv",
         "06_model_ready_fy25.csv",
-        "07_overlap_comparison.csv",
-        "08_allsector_validation.csv",
+        "07_p8_reconstruction_check.csv",
+        "08_overlap_discrepancy.csv",
     ]:
         full = os.path.join(ext_dir, fname)
         status = "OK     " if os.path.isfile(full) else "MISSING"
