@@ -3,7 +3,7 @@
 Data extraction and variable construction pipeline for the empirical analysis of
 the perceived cost of capital in Pakistan's non-financial corporate sector.
 
-**Reference:** Gormsen & Huber (2024, 2025)  
+**Reference:** Gormsen & Huber (2024, 2025)  # The current study does not involves extraction of information of earnings calls or any financial documents as PSX enviroment is different. this study is an indirect approach of observing the implications of the orignal work. 
 **Data source:** State Bank of Pakistan — Financial Statements Analysis of Non-Financial Companies
 
 ---
