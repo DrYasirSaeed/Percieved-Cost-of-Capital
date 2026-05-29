@@ -207,11 +207,13 @@ $$\text{Cashflow}_t = \frac{\text{Retention}_t}{\text{TotalAssets}_t}$$
 
 Set to `NaN` when `TotalAssets = 0` (zero-guard applied). Cash flow is included as a control for internal financing capacity; its coefficient in the investment equation has been debated as a test for financing constraints (Kaplan & Zingales 1997).
 
+**Note on extreme values:** A small number of firms with anomalously tiny asset bases (e.g. Zahur Cotton Mills FY2022, TotalAssets = PKR 93m, Retention = PKR 40.7bn) produce Cashflow values exceeding 400 in the raw data. These are data anomalies — likely unreported asset transfers or classification errors — not valid economic observations. `Cashflow` is therefore winsorised at the 1st/99th percentile alongside the main research variables (see Section 7).
+
 ### 6.5 Depreciation Rate
 
 $$\text{DepRate}_t = \frac{\text{Depreciation}_t}{\text{TotalAssets}_t}$$
 
-Same zero-guard as Cashflow. Depreciation rate proxies for the rate of capital obsolescence and therefore the minimum investment required to maintain the existing capital stock.
+Same zero-guard as Cashflow. Depreciation rate proxies for the rate of capital obsolescence and therefore the minimum investment required to maintain the existing capital stock. Raw values reach +11.9 in the tails (firms with near-zero assets) and are winsorised at 1st/99th percentile (see Section 7).
 
 ### 6.6 Sales Growth
 
@@ -228,17 +230,34 @@ CoC_Proxy_L2 = within-firm two-year lag of CoC_Proxy
 
 Lagged CoC is used in Model 3 to address potential reverse causality: current investment may affect current financing costs through the demand for credit, but it cannot affect last year's realised cost of debt.
 
-### 6.8 External Policy Variables (Placeholders)
+### 6.8 External Policy Variables
 
 | Column | Content | Source |
 |---|---|---|
-| `r_SBP` | SBP policy rate, Jul–Jun fiscal year annual average | SBP Monetary Policy History |
-| `CPI_inflation` | Annual CPI inflation rate | Pakistan Bureau of Statistics / IMF IFS |
-| `delta_r_SBP` | First difference of `r_SBP` (auto-computed) | — |
-| `Interaction` | `CoC_Proxy × delta_r_SBP` (auto-computed) | — |
-| `Real_CoC` | `CoC_Proxy − CPI_inflation` (auto-computed) | — |
+| `r_SBP` | SBP policy rate, Jul–Jun fiscal year annual average (%) | SBP Monetary Policy History |
+| `CPI_inflation` | Annual CPI inflation rate (%) | Pakistan Bureau of Statistics / IMF IFS |
+| `r_SBP_L1` | Prior-year policy rate — year-level calendar shift (%) | Derived |
+| `delta_r_SBP` | `r_SBP − r_SBP_L1`, change in policy rate (pp) | Derived |
+| `Interaction` | `CoC_Proxy × delta_r_SBP` | Derived |
+| `Real_CoC` | `CoC_Proxy − CPI_inflation/100` | Derived |
 
-These columns are left as `NaN` placeholders to be filled manually before regression. The pipeline will auto-populate `delta_r_SBP`, `Interaction`, and `Real_CoC` on the next run once `r_SBP` and `CPI_inflation` are supplied.
+**FY2014–FY2025 values are now populated** from `Extracted Data/10_external_macro_data.csv`, a hand-compiled file tracked in the repository. This file must be updated if the panel is extended beyond FY2025.
+
+**Implementation note:** `r_SBP_L1` is computed as a **year-level calendar shift** of the macro series (not a `groupby("firm_id").shift()` operation). This matters for an unbalanced panel: a within-firm shift would assign the FY2021 rate as the "FY2023 lag" for any firm missing FY2022, whereas a calendar shift always maps fiscal year *t* to the correct rate from year *t*−1 regardless of gaps in firm coverage.
+
+The macro series exhibits substantial variation across the panel period:
+
+| Year | r_SBP (%) | CPI (%) | delta_r_SBP (pp) | Real rate (pp) |
+|---|---|---|---|---|
+| FY2015 | 9.03 | 4.53 | −0.68 | +4.50 |
+| FY2017 | 5.75 | 4.16 | −0.77 | +1.59 |
+| FY2019 | 9.57 | 6.74 | +3.67 | +2.83 |
+| FY2021 | 7.00 | 9.50 | −5.05 | −2.50 |
+| FY2023 | 17.22 | 30.77 | +7.84 | −13.55 |
+| FY2024 | 21.92 | 26.00 | +4.70 | −4.08 |
+| FY2025 | 15.11 | 4.49 | −6.81 | +10.62 |
+
+The large swings in `delta_r_SBP` (range: −6.81 to +7.84 pp) provide the primary identification variation for Models 1–3.
 
 ---
 
@@ -248,19 +267,25 @@ Continuous variables are winsorised at the **1st and 99th percentiles computed o
 
 **Why panel-wide winsorisation rather than year-by-year?** Year-by-year winsorisation would distort cross-year comparisons because the cut-off itself would vary with the business cycle. Panel-wide winsorisation applies a single consistent rule, which is appropriate when the panel is used in a pooled regression with time fixed effects.
 
-**Variables winsorised and their post-winsorisation bounds (old file):**
+**All seven variables winsorised and their post-winsorisation bounds (old file, FY2014–2023):**
 
-| Variable | Lower bound (p1) | Upper bound (p99) | Obs clipped |
-|---|---|---|---|
-| `Inv_Rate` | −0.810 | +0.800 | 68 |
-| `CoC_Proxy` | 0.000 | +0.143 | 41 |
-| `P8_ROIC` | −1.170 | +1.412 | 68 |
-| `S1_Leverage` | −20.620 | +43.063 | 76 |
-| `SalesGrowth` | −1.000 | +2.777 | 30 |
+| Variable | Raw min | Raw max | p1 bound | p99 bound | Obs clipped | Rationale |
+|---|---|---|---|---|---|---|
+| `Inv_Rate` | −∞ | +∞ | −0.810 | +0.800 | 68 | Asset disposals and large capex spikes |
+| `CoC_Proxy` | 0.000 | +∞ | 0.000 | +0.143 | 41 | Distressed firms with tiny debt balances |
+| `P8_ROIC` | −160× | +160× | −1.170 | +1.412 | 68 | Firms with near-zero capital employed |
+| `S1_Leverage` | −649 | +337 | −20.620 | +43.063 | 76 | Near-zero or negative book equity |
+| `SalesGrowth` | −1.000 | +26,100% | −1.000 | +2.777 | 30 | New-entrant base-year denominator effects |
+| `Cashflow` | −73.8 | +437.6 | −0.703 | +0.257 | 76 | Asset-base anomalies (see §6.4) |
+| `DepRate` | −0.003 | +11.87 | 0.000 | +0.106 | 44 | Near-zero asset denominators |
 
-**Why is `P8_ROIC` winsorised?** In the old file, a small number of firms with very low capital employed (CapEmployed_avg < 50 million PKR) generate mechanically extreme ROIC values. For example, Karim Cotton Mills FY2015 reports EBIT of PKR 2,164m against an average capital employed of PKR 13.5m, producing a raw P8_ROIC of 160× — a data anomaly likely reflecting a restatement or classification error in the balance sheet. Winsorisation bounds the influence of these outliers without discarding the observations.
+Pre-winsorisation values are preserved as `<variable>_raw` columns in all output files, allowing researchers to verify the impact of outlier treatment on any specific finding.
 
-**Why is `S1_Leverage` winsorised?** Firms in financial distress or undergoing restructuring can carry near-zero or negative book equity, producing leverage ratios of −649 to +337 in the raw data. These extreme values are mechanically uninformative about the firm's typical capital structure.
+**Why is `P8_ROIC` winsorised?** In the old file, a small number of firms with very low capital employed (CapEmployed_avg < PKR 50m) generate mechanically extreme ROIC values. For example, Karim Cotton Mills FY2015 reports EBIT of PKR 2,164m against an average capital employed of PKR 13.5m, producing a raw P8_ROIC of 160× — a data anomaly likely reflecting a restatement or classification error in the balance sheet.
+
+**Why is `S1_Leverage` winsorised?** Firms in financial distress or undergoing restructuring can carry near-zero or negative book equity, producing leverage ratios of −649 to +337 in the raw data.
+
+**Why are `Cashflow` and `DepRate` winsorised?** Both variables use `TotalAssets` as the denominator. A subset of firms report near-zero total assets in isolated years (likely due to unreported asset transfers or classification inconsistencies between the two publication vintages), producing ratios that are economically meaningless. Winsorisation was added after the initial pipeline build when the descriptive statistics revealed Cashflow SD = 8.55 and a maximum of +437.6. After winsorisation, Cashflow SD = 0.13 and DepRate SD = 0.019.
 
 ---
 
@@ -402,25 +427,26 @@ The following boolean columns are pre-computed in all model-ready files. In regr
 
 ---
 
-## 13. External Placeholders
+## 13. External Macro Data
 
-Two columns are populated as `NaN` placeholders and must be filled manually before running regression scripts:
+### 13.1 Status
 
-### `r_SBP` — SBP Policy Rate
-- **Definition:** State Bank of Pakistan target policy rate, averaged over the fiscal year (July 1 – June 30).
-- **Source:** SBP Monetary Policy History, available at https://www.sbp.org.pk/m_policy/m_policy_rates.asp
-- **Computation:** Simple average of the daily policy rate over each fiscal year's 365 days, using the rate-change announcement dates.
-- **Years required:** FY2014–FY2025 (for lags: FY2013 rate also needed to compute delta for FY2014).
+`r_SBP` and `CPI_inflation` are **fully populated** for FY2014–FY2025 from `Extracted Data/10_external_macro_data.csv`, a hand-compiled file committed to the repository. All derived columns (`r_SBP_L1`, `delta_r_SBP`, `Interaction`, `Real_CoC`) are populated in `09_merged_panel.csv`. If the panel is extended beyond FY2025, add a new row to `10_external_macro_data.csv` and re-run steps 5 and 6 of the pipeline.
 
-### `CPI_inflation` — Annual CPI Inflation
-- **Definition:** Annual headline CPI inflation rate for Pakistan, fiscal year basis.
-- **Sources:** Pakistan Bureau of Statistics (PBS) Consumer Price Index; IMF International Financial Statistics (IFS series PA.P65.CPI.A).
-- **Years required:** FY2014–FY2025.
+### 13.2 Sources and Construction
 
-Once these are filled, the following columns auto-populate on the next pipeline run:
-- `delta_r_SBP` = `r_SBP_t − r_SBP_{t−1}`
-- `Interaction` = `CoC_Proxy × delta_r_SBP`
-- `Real_CoC` = `CoC_Proxy − CPI_inflation`
+**`r_SBP` — SBP Policy Rate (%)**
+- State Bank of Pakistan target policy rate, averaged over the fiscal year (July 1 – June 30).
+- Source: SBP Monetary Policy History — https://www.sbp.org.pk/m_policy/m_policy_rates.asp
+- Construction: simple average of the daily policy rate over each fiscal year's 365 days, using the rate-change announcement dates.
+
+**`CPI_inflation` — Annual CPI Inflation (%)**
+- Annual headline CPI inflation rate for Pakistan, fiscal year basis.
+- Sources: Pakistan Bureau of Statistics (PBS) Consumer Price Index; IMF International Financial Statistics (IFS series PA.P65.CPI.A).
+
+**`r_SBP_L1`** is computed as a year-level calendar shift of the macro series — not a `groupby("firm_id").shift()`. See §6.8 for the rationale.
+
+**`Real_CoC`** = `CoC_Proxy − CPI_inflation/100` converts CPI from percentage to proportion before subtracting, so both operands are in the same decimal units.
 
 ---
 
@@ -428,32 +454,57 @@ Once these are filled, the following columns auto-populate on the next pipeline 
 
 ### Scripts (execute in order)
 
-| Script | Function | Input | Output |
-|---|---|---|---|
-| `01_extract_firm_panel_old.py` | Extract firm panel from 2005-23 workbook | `2005-23.xlsx` | `01_raw_firm_panel_old.csv` |
-| `02_extract_firm_panel_fy25.py` | Extract firm panel from FY25 workbook | `FSA_NFC_FY20_FY25.xlsx` | `02_raw_firm_panel_fy25.csv` |
-| `03_compute_variables.py` | Construct all research variables; winsorise | `01_`, `02_` raw CSVs | `03_`, `04_` computed CSVs |
-| `04_merge_validate.py` | P8 overlap check; export model-ready panels | `03_`, `04_` computed CSVs | `05_` to `08_` CSVs |
-| `05_build_merged_panel.py` | Exclusion list; stitch panels; recompute lags | `05_`, `06_`, `07_` CSVs | `excluded_firms.csv`, `09_merged_panel.csv` |
+| Step | Script | Function | Key input | Key output |
+|---|---|---|---|---|
+| 1 | `01_extract_firm_panel_old.py` | Extract firm panel from 2005-23 workbook | `2005-23.xlsx` | `01_raw_firm_panel_old.csv` |
+| 2 | `02_extract_firm_panel_fy25.py` | Extract firm panel from FY25 workbook | `FSA_NFC_FY20_FY25.xlsx` | `02_raw_firm_panel_fy25.csv` |
+| 3 | `03_compute_variables.py` | Build all variables; winsorise 7 columns | `01_`, `02_` raw CSVs | `03_`, `04_` computed CSVs |
+| 4 | `04_merge_validate.py` | P8 overlap check; export model-ready panels | `03_`, `04_` CSVs | `05_` to `08_` CSVs |
+| 5 | `05_build_merged_panel.py` | Exclusion list; stitch panels; recompute lags | `05_`, `06_`, `07_` CSVs + `10_` macro | `excluded_firms.csv`, `09_merged_panel.csv` |
+| 6 | `06_descriptive_statistics.py` | 12 descriptive tables + master Excel workbook | `09_merged_panel.csv` | `Results/desc_*.csv`, `Results/descriptive_statistics_master.xlsx` |
 
-Run `python main.py` from the `Codes/` directory to execute all five steps in sequence.
+Steps 1–5 are orchestrated by `main.py`. Step 6 is run independently: `python 06_descriptive_statistics.py`.
 
-### Output Files
+**Note:** After step 5 completes, macro data from `10_external_macro_data.csv` must be merged into `09_merged_panel.csv` before step 6. This is done automatically if `05_build_merged_panel.py` is called with the macro file present; otherwise run the macro-injection snippet documented in the repository README.
+
+### Extracted Data Output Files
 
 | File | Rows | Firms | Description |
 |---|---|---|---|
-| `01_raw_firm_panel_old.csv` | 3,742 | 433 | Raw extracted items, old file, FY2014-2023 |
-| `02_raw_firm_panel_fy25.csv` | 2,188 | 393 | Raw extracted items, FY25 file, FY2020-2025 |
-| `03_firm_panel_old_computed.csv` | 3,742 | 433 | Old file + all computed variables (winsorised) |
-| `04_firm_panel_fy25_computed.csv` | 2,188 | 393 | FY25 file + all computed variables (winsorised) |
-| `05_model_ready_old.csv` | 3,742 | 433 | **Primary estimation panel**, FY2014-2023 |
-| `06_model_ready_fy25.csv` | 2,188 | 393 | **Validation panel**, FY2020-2025 |
+| `01_raw_firm_panel_old.csv` | 3,742 | 433 | Raw extracted items, old file, FY2014–2023 |
+| `02_raw_firm_panel_fy25.csv` | 2,188 | 393 | Raw extracted items, FY25 file, FY2020–2025 |
+| `03_firm_panel_old_computed.csv` | 3,742 | 433 | Old file + all 7 winsorised variables |
+| `04_firm_panel_fy25_computed.csv` | 2,188 | 393 | FY25 file + all 7 winsorised variables |
+| `05_model_ready_old.csv` | 3,742 | 433 | **Primary estimation panel**, FY2014–2023 |
+| `06_model_ready_fy25.csv` | 2,188 | 393 | **Validation panel**, FY2020–2025 |
 | `07_p8_reconstruction_check.csv` | 1,422 | 373 | Per-firm-year P8 comparison (old vs FY25) |
 | `08_overlap_discrepancy.csv` | — | 373 | Raw variable % differences in overlap years |
+| `10_external_macro_data.csv` | 12 | — | **Hand-compiled macro series** FY2014–2025 (tracked in git) |
 | `excluded_firms.csv` | — | 93 | Restructuring/M&A exclusion list |
-| `09_merged_panel.csv` | 3,095 | 342 | **Stitched panel**, FY2015-2025 |
+| `09_merged_panel.csv` | 3,095 | 342 | **Stitched panel with macro**, FY2015–2025 |
 
-### Descriptive Statistics — Merged Panel (post-winsorisation)
+### Results Folder — Descriptive Statistics Output
+
+Script `06_descriptive_statistics.py` produces 13 CSV files and one master Excel workbook in `Results/`:
+
+| File | Angle covered |
+|---|---|
+| `desc_01_full_variable_stats.csv` | Full distribution: N, mean, SD, min, p5–p95, max, skewness, excess kurtosis |
+| `desc_02_by_fiscal_year.csv` | Year-by-year means/medians for all core variables + macro |
+| `desc_03_by_sector.csv` | Per-sector firm count, obs, year span, % zero-interest, variable means |
+| `desc_04_by_size_quartile.csv` | Q1 (Small) to Q4 (Large): investment, CoC, leverage, ROIC by firm size |
+| `desc_05_by_debt_status.csv` | Zero-interest vs debt-carrying firms on all dimensions |
+| `desc_06a_panel_balance.csv` | Years-per-firm distribution (67.8% of firms have all 11 years) |
+| `desc_06b_entry_exit.csv` | Firm entry and exit counts by year |
+| `desc_07_sample_flags.csv` | Obs and firm counts for each flag and key intersections |
+| `desc_08_correlation.csv` | 11×11 Pearson correlation matrix of core regression variables |
+| `desc_09_macro_series.csv` | Year-level macro table with panel mean/median CoC and Inv_Rate |
+| `desc_10_sector_year_CoC_heatmap.csv` | 14 × 11 matrix of mean CoC_Proxy by sector and year |
+| `desc_11_raw_financials_PKRbn.csv` | Balance sheet scale in PKR billions (TotalAssets through Depreciation) |
+| `desc_12_source_comparison.csv` | Old-file vs FY25-extension side-by-side comparison |
+| `descriptive_statistics_master.xlsx` | All 13 tables as formatted sheets in one workbook |
+
+### Descriptive Statistics — Merged Panel (post-winsorisation, all 7 variables)
 
 | Variable | N | Mean | SD | p25 | Median | p75 |
 |---|---|---|---|---|---|---|
@@ -462,6 +513,8 @@ Run `python main.py` from the `Codes/` directory to execute all five steps in se
 | P8_ROIC | 3,060 | 0.112 | 0.252 | 0.010 | 0.110 | 0.211 |
 | S1_Leverage | 3,095 | 1.307 | 4.812 | 0.361 | 0.868 | 1.622 |
 | SalesGrowth | 2,739 | 0.115 | 0.517 | −0.088 | 0.077 | 0.242 |
+| Cashflow | 3,095 | −0.011 | 0.128 | −0.032 | 0.011 | 0.045 |
+| DepRate | 3,095 | 0.027 | 0.019 | 0.015 | 0.025 | 0.036 |
 | Size_ln | 3,095 | 15.307 | 2.152 | 14.015 | 15.448 | 16.764 |
 
 ---

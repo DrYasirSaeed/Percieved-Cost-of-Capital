@@ -280,7 +280,8 @@ def process_panel(input_path: str, output_path: str,
 
     df = compute_variables(df, label, reconstruct_p8=reconstruct_p8)
     df = winsorize_panel(df, ["Inv_Rate_raw", "CoC_Proxy_raw",
-                              "P8_ROIC", "S1_Leverage", "SalesGrowth"])
+                              "P8_ROIC", "S1_Leverage", "SalesGrowth",
+                              "Cashflow", "DepRate"])
 
     # Final analysis columns (use winsorised versions)
     df["Inv_Rate"]  = df["Inv_Rate_raw"]
